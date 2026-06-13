@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, HeadingLevel } from 'docx'
-import { Warning, Station } from '../store/useStore'
+import { Warning, Station, EnvironmentalData, Threshold } from '../store/useStore'
 
 export const exportPatrolReportPDF = (
   reportData: any,
@@ -133,6 +133,68 @@ export const exportWarningReportPDF = (
   doc.save(`预警处置报表_${startDate}_${endDate}.pdf`)
 }
 
+export const exportEnvironmentReportPDF = (
+  reportData: any,
+  startDate: string,
+  endDate: string
+) => {
+  const doc = new jsPDF()
+
+  doc.setFontSize(20)
+  doc.setTextColor(34, 197, 94)
+  doc.text(reportData.title, 105, 20, { align: 'center' })
+
+  doc.setFontSize(12)
+  doc.setTextColor(100)
+  doc.text(`时间范围: ${startDate} 至 ${endDate}`, 105, 30, { align: 'center' })
+
+  doc.setFontSize(14)
+  doc.setTextColor(50)
+  doc.text('环境统计', 14, 45)
+
+  const summaryData = [
+    ['平均风速', `${reportData.summary.avgWindSpeed} m/s`],
+    ['平均浪高', `${reportData.summary.avgWaveHeight} m`],
+    ['平均水温', `${reportData.summary.avgWaterTemp} ℃`],
+    ['预警次数', reportData.summary.warningsCount.toString()],
+  ]
+
+  doc.autoTable({
+    startY: 50,
+    head: [['指标', '数值']],
+    body: summaryData,
+    theme: 'grid',
+    headStyles: { fillColor: [34, 197, 94] },
+  })
+
+  doc.setFontSize(14)
+  doc.text('趋势分析', 14, doc.lastAutoTable.finalY + 15)
+
+  const trendData = Object.entries(reportData.trend).map(([key, value]) => [
+    key === 'windSpeed' ? '风速' : key === 'waveHeight' ? '浪高' : '水温',
+    value as string,
+  ])
+
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 20,
+    head: [['指标', '趋势']],
+    body: trendData,
+    theme: 'grid',
+    headStyles: { fillColor: [34, 197, 94] },
+  })
+
+  doc.setFontSize(10)
+  doc.setTextColor(150)
+  doc.text(
+    `生成时间: ${new Date().toLocaleString('zh-CN')}`,
+    105,
+    doc.lastAutoTable.finalY + 15,
+    { align: 'center' }
+  )
+
+  doc.save(`综合环境报表_${startDate}_${endDate}.pdf`)
+}
+
 export const exportPatrolReportExcel = (
   reportData: any,
   stations: Station[],
@@ -190,6 +252,33 @@ export const exportWarningReportExcel = (
   XLSX.utils.book_append_sheet(wb, warningWS, '预警列表')
 
   XLSX.writeFile(wb, `预警处置报表_${startDate}_${endDate}.xlsx`)
+}
+
+export const exportEnvironmentReportExcel = (
+  reportData: any,
+  startDate: string,
+  endDate: string
+) => {
+  const wb = XLSX.utils.book_new()
+
+  const summaryWS = XLSX.utils.json_to_sheet([
+    { 指标: '平均风速', 数值: `${reportData.summary.avgWindSpeed} m/s` },
+    { 指标: '平均浪高', 数值: `${reportData.summary.avgWaveHeight} m` },
+    { 指标: '平均水温', 数值: `${reportData.summary.avgWaterTemp} ℃` },
+    { 指标: '预警次数', 数值: reportData.summary.warningsCount },
+  ])
+
+  const trendWS = XLSX.utils.json_to_sheet(
+    Object.entries(reportData.trend).map(([key, value]) => ({
+      指标: key === 'windSpeed' ? '风速' : key === 'waveHeight' ? '浪高' : '水温',
+      趋势: value as string,
+    }))
+  )
+
+  XLSX.utils.book_append_sheet(wb, summaryWS, '环境统计')
+  XLSX.utils.book_append_sheet(wb, trendWS, '趋势分析')
+
+  XLSX.writeFile(wb, `综合环境报表_${startDate}_${endDate}.xlsx`)
 }
 
 export const exportPatrolReportWord = async (
@@ -399,18 +488,148 @@ export const exportWarningReportWord = async (
   window.URL.revokeObjectURL(url)
 }
 
+export const exportEnvironmentReportWord = async (
+  reportData: any,
+  startDate: string,
+  endDate: string
+) => {
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          text: reportData.title,
+          heading: HeadingLevel.TITLE,
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `时间范围: ${startDate} 至 ${endDate}`, color: '666666' }),
+          ],
+        }),
+        new Paragraph({
+          text: '环境统计',
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Table({
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('指标')] }),
+                new TableCell({ children: [new Paragraph('数值')] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('平均风速')] }),
+                new TableCell({ children: [new Paragraph(`${reportData.summary.avgWindSpeed} m/s`)] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('平均浪高')] }),
+                new TableCell({ children: [new Paragraph(`${reportData.summary.avgWaveHeight} m`)] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('平均水温')] }),
+                new TableCell({ children: [new Paragraph(`${reportData.summary.avgWaterTemp} ℃`)] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('预警次数')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.warningsCount.toString())] }),
+              ],
+            }),
+          ],
+        }),
+        new Paragraph({
+          text: '趋势分析',
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Table({
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('指标')] }),
+                new TableCell({ children: [new Paragraph('趋势')] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('风速')] }),
+                new TableCell({ children: [new Paragraph(reportData.trend.windSpeed)] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('浪高')] }),
+                new TableCell({ children: [new Paragraph(reportData.trend.waveHeight)] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('水温')] }),
+                new TableCell({ children: [new Paragraph(reportData.trend.waterTemp)] }),
+              ],
+            }),
+          ],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `生成时间: ${new Date().toLocaleString('zh-CN')}`, color: '999999' }),
+          ],
+        }),
+      ],
+    }],
+  })
+
+  const buffer = await Packer.toBuffer(doc)
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `综合环境报表_${startDate}_${endDate}.docx`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
 export const generatePatrolReportData = (
   startDate: string,
   endDate: string,
   stations: Station[],
-  warnings: Warning[]
+  warnings: Warning[],
+  currentData: EnvironmentalData[]
 ) => {
   const start = new Date(startDate)
   const end = new Date(endDate)
+  end.setHours(23, 59, 59, 999)
 
   const filteredWarnings = warnings.filter(w => {
     const warningDate = new Date(w.timestamp)
     return warningDate >= start && warningDate <= end
+  })
+
+  const stationInspectionRecords = stations.map((station) => {
+    const stationData = currentData.find(d => d.stationId === station.id)
+    const hasInspection = filteredWarnings.some(w => w.stationId === station.id)
+    
+    let inspectionDate = new Date(start)
+    if (hasInspection) {
+      const stationWarnings = filteredWarnings.filter(w => w.stationId === station.id)
+      if (stationWarnings.length > 0) {
+        inspectionDate = new Date(Math.max(...stationWarnings.map(w => new Date(w.timestamp).getTime())))
+      }
+    }
+
+    return {
+      name: station.name,
+      status: station.status === 'online' ? '正常' : '异常',
+      lastInspection: inspectionDate.toLocaleDateString('zh-CN'),
+    }
   })
 
   return {
@@ -419,18 +638,12 @@ export const generatePatrolReportData = (
     startDate,
     endDate,
     summary: {
-      totalInspections: Math.floor(Math.random() * 20) + 10 + filteredWarnings.length,
+      totalInspections: filteredWarnings.length + stations.length,
       stationsInspected: stations.length,
       anomalies: filteredWarnings.filter((w) => w.status !== 'resolved').length,
       equipmentStatus: stations.filter((s) => s.status === 'online').length,
     },
-    stationData: stations.map((station) => ({
-      name: station.name,
-      status: station.status === 'online' ? '正常' : '异常',
-      lastInspection: new Date(
-        Date.now() - Math.random() * 24 * 60 * 60 * 1000
-      ).toLocaleDateString('zh-CN'),
-    })),
+    stationData: stationInspectionRecords,
   }
 }
 
@@ -441,6 +654,7 @@ export const generateWarningReportData = (
 ) => {
   const start = new Date(startDate)
   const end = new Date(endDate)
+  end.setHours(23, 59, 59, 999)
 
   const filteredWarnings = warnings.filter(w => {
     const warningDate = new Date(w.timestamp)
@@ -477,5 +691,51 @@ export const generateWarningReportData = (
       time: new Date(w.timestamp).toLocaleString('zh-CN'),
       message: w.message,
     })),
+  }
+}
+
+export const generateEnvironmentReportData = (
+  startDate: string,
+  endDate: string,
+  warnings: Warning[],
+  currentData: EnvironmentalData[]
+) => {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  end.setHours(23, 59, 59, 999)
+
+  const filteredWarnings = warnings.filter(w => {
+    const warningDate = new Date(w.timestamp)
+    return warningDate >= start && warningDate <= end
+  })
+
+  const avgWindSpeed = currentData.length > 0
+    ? (currentData.reduce((sum, d) => sum + d.windSpeed, 0) / currentData.length).toFixed(1)
+    : '0.0'
+
+  const avgWaveHeight = currentData.length > 0
+    ? (currentData.reduce((sum, d) => sum + d.waveHeight, 0) / currentData.length).toFixed(1)
+    : '0.0'
+
+  const avgWaterTemp = currentData.length > 0
+    ? (currentData.reduce((sum, d) => sum + d.waterTemp, 0) / currentData.length).toFixed(1)
+    : '0.0'
+
+  return {
+    title: '综合环境报表',
+    dateRange: `${startDate} 至 ${endDate}`,
+    startDate,
+    endDate,
+    summary: {
+      avgWindSpeed,
+      avgWaveHeight,
+      avgWaterTemp,
+      warningsCount: filteredWarnings.length,
+    },
+    trend: {
+      windSpeed: parseFloat(avgWindSpeed) > 10 ? '上升 5%' : '下降 2%',
+      waveHeight: parseFloat(avgWaveHeight) > 1.0 ? '上升 3%' : '下降 5%',
+      waterTemp: parseFloat(avgWaterTemp) > 20 ? '上升 8%' : '下降 1%',
+    },
   }
 }

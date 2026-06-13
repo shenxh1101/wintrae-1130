@@ -24,11 +24,13 @@ export default function WarningCenter() {
     warnings,
     thresholds,
     stations,
+    currentData,
     setWarnings,
     setStations,
     setCurrentData,
     updateWarning,
     updateThresholds,
+    addWarning,
   } = useOceanStore()
 
   const [filter, setFilter] = useState({
@@ -56,65 +58,188 @@ export default function WarningCenter() {
     setEditingThresholds([...thresholds])
   }, [thresholds])
 
-  const reevaluateAllWarnings = (currentThresholds: any[]) => {
-    return warnings.map((w) => {
-      const threshold = currentThresholds.find((t) => {
-        if (w.type === 'wind') return t.parameter === 'windSpeed'
-        if (w.type === 'visibility') return t.parameter === 'visibility'
-        if (w.type === 'water') return t.parameter === 'waterTemp' || t.parameter === 'salinity'
-        return false
+  const generateWarningsFromCurrentData = (
+    stations: any[],
+    data: any[],
+    currentThresholds: any[]
+  ) => {
+    const newWarnings: any[] = []
+    const now = new Date()
+
+    stations.forEach((station) => {
+      const stationData = data.find((d: any) => d.stationId === station.id)
+      if (!stationData) return
+
+      const windThreshold = currentThresholds.find((t: any) => t.parameter === 'windSpeed')
+      if (windThreshold) {
+        if (stationData.windSpeed > windThreshold.danger) {
+          newWarnings.push({
+            id: `new-warning-${Date.now()}-${station.id}-wind`,
+            stationId: station.id,
+            type: 'wind',
+            level: 'danger',
+            message: `风速超过安全阈值：${stationData.windSpeed} m/s`,
+            value: stationData.windSpeed,
+            threshold: windThreshold.danger,
+            timestamp: now.toISOString(),
+            status: 'pending',
+          })
+        } else if (stationData.windSpeed > windThreshold.warning) {
+          newWarnings.push({
+            id: `new-warning-${Date.now()}-${station.id}-wind`,
+            stationId: station.id,
+            type: 'wind',
+            level: 'warning',
+            message: `风速超过安全阈值：${stationData.windSpeed} m/s`,
+            value: stationData.windSpeed,
+            threshold: windThreshold.warning,
+            timestamp: now.toISOString(),
+            status: 'pending',
+          })
+        }
+      }
+
+      const visibilityThreshold = currentThresholds.find((t: any) => t.parameter === 'visibility')
+      if (visibilityThreshold) {
+        if (stationData.visibility < visibilityThreshold.danger) {
+          newWarnings.push({
+            id: `new-warning-${Date.now()}-${station.id}-visibility`,
+            stationId: station.id,
+            type: 'visibility',
+            level: 'danger',
+            message: `能见度较低：${stationData.visibility} km`,
+            value: stationData.visibility,
+            threshold: visibilityThreshold.danger,
+            timestamp: now.toISOString(),
+            status: 'pending',
+          })
+        } else if (stationData.visibility < visibilityThreshold.warning) {
+          newWarnings.push({
+            id: `new-warning-${Date.now()}-${station.id}-visibility`,
+            stationId: station.id,
+            type: 'visibility',
+            level: 'warning',
+            message: `能见度较低：${stationData.visibility} km`,
+            value: stationData.visibility,
+            threshold: visibilityThreshold.warning,
+            timestamp: now.toISOString(),
+            status: 'pending',
+          })
+        }
+      }
+
+      const waterTempThreshold = currentThresholds.find((t: any) => t.parameter === 'waterTemp')
+      if (waterTempThreshold) {
+        if (stationData.waterTemp > waterTempThreshold.danger) {
+          newWarnings.push({
+            id: `new-warning-${Date.now()}-${station.id}-water`,
+            stationId: station.id,
+            type: 'water',
+            level: 'danger',
+            message: `水温异常：${stationData.waterTemp} ℃`,
+            value: stationData.waterTemp,
+            threshold: waterTempThreshold.danger,
+            timestamp: now.toISOString(),
+            status: 'pending',
+          })
+        } else if (stationData.waterTemp > waterTempThreshold.warning) {
+          newWarnings.push({
+            id: `new-warning-${Date.now()}-${station.id}-water`,
+            stationId: station.id,
+            type: 'water',
+            level: 'warning',
+            message: `水温异常：${stationData.waterTemp} ℃`,
+            value: stationData.waterTemp,
+            threshold: waterTempThreshold.warning,
+            timestamp: now.toISOString(),
+            status: 'pending',
+          })
+        }
+      }
+    })
+
+    return newWarnings
+  }
+
+  const reevaluateAllWarnings = (
+    existingWarnings: any[],
+    currentThresholds: any[]
+  ) => {
+    return existingWarnings
+      .map((w) => {
+        const threshold = currentThresholds.find((t: any) => {
+          if (w.type === 'wind') return t.parameter === 'windSpeed'
+          if (w.type === 'visibility') return t.parameter === 'visibility'
+          if (w.type === 'water') return t.parameter === 'waterTemp' || t.parameter === 'salinity'
+          return false
+        })
+
+        if (!threshold) return w
+
+        let newLevel = 'info'
+        let shouldKeep = false
+        let newThreshold = threshold.warning
+
+        if (w.type === 'visibility') {
+          if (w.value < threshold.danger) {
+            newLevel = 'danger'
+            shouldKeep = true
+            newThreshold = threshold.danger
+          } else if (w.value < threshold.warning) {
+            newLevel = 'warning'
+            shouldKeep = true
+            newThreshold = threshold.warning
+          } else {
+            shouldKeep = false
+          }
+        } else {
+          if (w.value > threshold.danger) {
+            newLevel = 'danger'
+            shouldKeep = true
+            newThreshold = threshold.danger
+          } else if (w.value > threshold.warning) {
+            newLevel = 'warning'
+            shouldKeep = true
+            newThreshold = threshold.warning
+          } else {
+            shouldKeep = false
+          }
+        }
+
+        if (!shouldKeep) {
+          return null
+        }
+
+        return {
+          ...w,
+          level: newLevel,
+          threshold: newThreshold,
+        }
       })
-
-      if (!threshold) return w
-
-      let newLevel = 'info'
-      let shouldKeep = false
-      let newThreshold = threshold.warning
-
-      if (w.type === 'visibility') {
-        if (w.value < threshold.danger) {
-          newLevel = 'danger'
-          shouldKeep = true
-          newThreshold = threshold.danger
-        } else if (w.value < threshold.warning) {
-          newLevel = 'warning'
-          shouldKeep = true
-          newThreshold = threshold.warning
-        } else {
-          shouldKeep = false
-        }
-      } else {
-        if (w.value > threshold.danger) {
-          newLevel = 'danger'
-          shouldKeep = true
-          newThreshold = threshold.danger
-        } else if (w.value > threshold.warning) {
-          newLevel = 'warning'
-          shouldKeep = true
-          newThreshold = threshold.warning
-        } else {
-          shouldKeep = false
-        }
-      }
-
-      if (!shouldKeep) {
-        return null
-      }
-
-      return {
-        ...w,
-        level: newLevel,
-        threshold: newThreshold,
-      }
-    }).filter(Boolean)
+      .filter(Boolean)
   }
 
   const handleSaveThresholds = () => {
     updateThresholds(editingThresholds)
-    
-    const reevaluatedWarnings = reevaluateAllWarnings(editingThresholds)
-    setWarnings(reevaluatedWarnings)
-    
+
+    const existingWarnings = warnings.filter((w) => w.status !== 'resolved')
+    const reevaluatedWarnings = reevaluateAllWarnings(existingWarnings, editingThresholds)
+
+    const newWarningsFromCurrentData = generateWarningsFromCurrentData(
+      stations,
+      currentData,
+      editingThresholds
+    )
+
+    const existingIds = new Set(reevaluatedWarnings.map((w: any) => w.id))
+    const uniqueNewWarnings = newWarningsFromCurrentData.filter(
+      (nw: any) => !existingIds.has(nw.id)
+    )
+
+    const allWarnings = [...uniqueNewWarnings, ...warnings.filter((w) => w.status === 'resolved')]
+
+    setWarnings([...reevaluatedWarnings, ...allWarnings.filter((w: any) => w.status === 'resolved')])
+
     setShowConfig(false)
   }
 
@@ -256,7 +381,7 @@ export default function WarningCenter() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h4 className="text-sm font-medium text-gray-300">预警阈值设置</h4>
-                <p className="text-xs text-gray-500 mt-1">保存后将根据新阈值重新评估所有预警</p>
+                <p className="text-xs text-gray-500 mt-1">保存后将根据新阈值重新评估所有预警，并检查当前监测数据是否产生新预警</p>
               </div>
               <div className="flex gap-2">
                 <button
@@ -326,7 +451,7 @@ export default function WarningCenter() {
             </div>
             <div className="mt-4 p-3 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
               <div className="text-xs text-ocean-400">
-                💡 提示：保存阈值配置后，系统将自动重新评估所有预警，移除不再符合条件的预警，并更新预警等级和阈值数字
+                💡 提示：保存阈值配置后，系统将自动移除不再符合条件的预警，并根据当前监测数据生成新的预警
               </div>
             </div>
           </div>

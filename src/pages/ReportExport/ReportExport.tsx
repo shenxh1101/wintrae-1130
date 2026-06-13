@@ -18,16 +18,20 @@ import {
 import {
   exportPatrolReportPDF,
   exportWarningReportPDF,
+  exportEnvironmentReportPDF,
   exportPatrolReportExcel,
   exportWarningReportExcel,
+  exportEnvironmentReportExcel,
   exportPatrolReportWord,
   exportWarningReportWord,
+  exportEnvironmentReportWord,
   generatePatrolReportData,
   generateWarningReportData,
+  generateEnvironmentReportData,
 } from '../../services/exportService'
 
 export default function ReportExport() {
-  const { stations, warnings, operations, setStations, setCurrentData, setWarnings, setOperations } =
+  const { stations, warnings, operations, currentData, setStations, setCurrentData, setWarnings, setOperations } =
     useOceanStore()
 
   const [reportType, setReportType] = useState('patrol')
@@ -54,36 +58,13 @@ export default function ReportExport() {
 
   const generatePreview = () => {
     if (reportType === 'patrol') {
-      const patrolData = generatePatrolReportData(startDate, endDate, stations, warnings)
+      const patrolData = generatePatrolReportData(startDate, endDate, stations, warnings, currentData)
       setPreviewData(patrolData)
     } else if (reportType === 'warning') {
       const warningData = generateWarningReportData(startDate, endDate, warnings)
       setPreviewData(warningData)
     } else {
-      const filteredWarnings = warnings.filter(w => {
-        const warningDate = new Date(w.timestamp)
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-        return warningDate >= start && warningDate <= end
-      })
-
-      const envData = {
-        title: '综合环境报表',
-        dateRange: `${startDate} 至 ${endDate}`,
-        startDate,
-        endDate,
-        summary: {
-          avgWindSpeed: '8.5',
-          avgWaveHeight: '0.8',
-          avgWaterTemp: '22.3',
-          warningsCount: filteredWarnings.length,
-        },
-        trend: {
-          windSpeed: '上升 5%',
-          waveHeight: '下降 2%',
-          waterTemp: '上升 3%',
-        },
-      }
+      const envData = generateEnvironmentReportData(startDate, endDate, warnings, currentData)
       setPreviewData(envData)
     }
   }
@@ -112,6 +93,14 @@ export default function ReportExport() {
           exportWarningReportExcel(previewData, startDate, endDate)
         } else if (format === 'word') {
           await exportWarningReportWord(previewData, startDate, endDate)
+        }
+      } else if (reportType === 'environment') {
+        if (format === 'pdf') {
+          exportEnvironmentReportPDF(previewData, startDate, endDate)
+        } else if (format === 'excel') {
+          exportEnvironmentReportExcel(previewData, startDate, endDate)
+        } else if (format === 'word') {
+          await exportEnvironmentReportWord(previewData, startDate, endDate)
         }
       }
 
@@ -295,11 +284,11 @@ export default function ReportExport() {
                               : key === 'resolved'
                               ? '已解决'
                               : key === 'avgWindSpeed'
-                              ? '平均风速'
+                              ? '平均风速 (m/s)'
                               : key === 'avgWaveHeight'
-                              ? '平均浪高'
+                              ? '平均浪高 (m)'
                               : key === 'avgWaterTemp'
-                              ? '平均水温'
+                              ? '平均水温 (℃)'
                               : key === 'warningsCount'
                               ? '预警次数'
                               : key}
