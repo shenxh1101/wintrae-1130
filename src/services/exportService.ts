@@ -1,11 +1,14 @@
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import * as XLSX from 'xlsx'
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, HeadingLevel } from 'docx'
 import { Warning, Station } from '../store/useStore'
 
 export const exportPatrolReportPDF = (
   reportData: any,
-  stations: Station[]
+  stations: Station[],
+  startDate: string,
+  endDate: string
 ) => {
   const doc = new jsPDF()
 
@@ -15,7 +18,7 @@ export const exportPatrolReportPDF = (
 
   doc.setFontSize(12)
   doc.setTextColor(100)
-  doc.text(`时间范围: ${reportData.dateRange}`, 105, 30, { align: 'center' })
+  doc.text(`时间范围: ${startDate} 至 ${endDate}`, 105, 30, { align: 'center' })
 
   doc.setFontSize(14)
   doc.setTextColor(50)
@@ -62,10 +65,14 @@ export const exportPatrolReportPDF = (
     { align: 'center' }
   )
 
-  doc.save(`日常巡查报表_${new Date().toISOString().split('T')[0]}.pdf`)
+  doc.save(`日常巡查报表_${startDate}_${endDate}.pdf`)
 }
 
-export const exportWarningReportPDF = (reportData: any) => {
+export const exportWarningReportPDF = (
+  reportData: any,
+  startDate: string,
+  endDate: string
+) => {
   const doc = new jsPDF()
 
   doc.setFontSize(20)
@@ -74,7 +81,7 @@ export const exportWarningReportPDF = (reportData: any) => {
 
   doc.setFontSize(12)
   doc.setTextColor(100)
-  doc.text(`时间范围: ${reportData.dateRange}`, 105, 30, { align: 'center' })
+  doc.text(`时间范围: ${startDate} 至 ${endDate}`, 105, 30, { align: 'center' })
 
   doc.setFontSize(14)
   doc.setTextColor(50)
@@ -123,12 +130,14 @@ export const exportWarningReportPDF = (reportData: any) => {
     { align: 'center' }
   )
 
-  doc.save(`预警处置报表_${new Date().toISOString().split('T')[0]}.pdf`)
+  doc.save(`预警处置报表_${startDate}_${endDate}.pdf`)
 }
 
 export const exportPatrolReportExcel = (
   reportData: any,
-  stations: Station[]
+  stations: Station[],
+  startDate: string,
+  endDate: string
 ) => {
   const wb = XLSX.utils.book_new()
 
@@ -150,10 +159,14 @@ export const exportPatrolReportExcel = (
   XLSX.utils.book_append_sheet(wb, summaryWS, '数据汇总')
   XLSX.utils.book_append_sheet(wb, stationWS, '监测站详情')
 
-  XLSX.writeFile(wb, `日常巡查报表_${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `日常巡查报表_${startDate}_${endDate}.xlsx`)
 }
 
-export const exportWarningReportExcel = (reportData: any) => {
+export const exportWarningReportExcel = (
+  reportData: any,
+  startDate: string,
+  endDate: string
+) => {
   const wb = XLSX.utils.book_new()
 
   const summaryWS = XLSX.utils.json_to_sheet([
@@ -176,7 +189,214 @@ export const exportWarningReportExcel = (reportData: any) => {
   XLSX.utils.book_append_sheet(wb, summaryWS, '预警统计')
   XLSX.utils.book_append_sheet(wb, warningWS, '预警列表')
 
-  XLSX.writeFile(wb, `预警处置报表_${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `预警处置报表_${startDate}_${endDate}.xlsx`)
+}
+
+export const exportPatrolReportWord = async (
+  reportData: any,
+  stations: Station[],
+  startDate: string,
+  endDate: string
+) => {
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          text: reportData.title,
+          heading: HeadingLevel.TITLE,
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `时间范围: ${startDate} 至 ${endDate}`, color: '666666' }),
+          ],
+        }),
+        new Paragraph({
+          text: '数据汇总',
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Table({
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('指标')] }),
+                new TableCell({ children: [new Paragraph('数值')] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('巡查次数')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.totalInspections.toString())] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('监测站数')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.stationsInspected.toString())] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('异常次数')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.anomalies.toString())] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('设备正常数')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.equipmentStatus.toString())] }),
+              ],
+            }),
+          ],
+        }),
+        new Paragraph({
+          text: '监测站详情',
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Table({
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('监测站名称')] }),
+                new TableCell({ children: [new Paragraph('状态')] }),
+                new TableCell({ children: [new Paragraph('最后巡查时间')] }),
+              ],
+            }),
+            ...reportData.stationData.map((s: any) =>
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph(s.name)] }),
+                  new TableCell({ children: [new Paragraph(s.status)] }),
+                  new TableCell({ children: [new Paragraph(s.lastInspection)] }),
+                ],
+              })
+            ),
+          ],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `生成时间: ${new Date().toLocaleString('zh-CN')}`, color: '999999' }),
+          ],
+        }),
+      ],
+    }],
+  })
+
+  const buffer = await Packer.toBuffer(doc)
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `日常巡查报表_${startDate}_${endDate}.docx`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
+export const exportWarningReportWord = async (
+  reportData: any,
+  startDate: string,
+  endDate: string
+) => {
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      children: [
+        new Paragraph({
+          text: reportData.title,
+          heading: HeadingLevel.TITLE,
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `时间范围: ${startDate} 至 ${endDate}`, color: '666666' }),
+          ],
+        }),
+        new Paragraph({
+          text: '预警统计',
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Table({
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('状态')] }),
+                new TableCell({ children: [new Paragraph('数量')] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('预警总数')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.totalWarnings.toString())] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('待处理')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.pending.toString())] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('处理中')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.confirmed.toString())] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('已解决')] }),
+                new TableCell({ children: [new Paragraph(reportData.summary.resolved.toString())] }),
+              ],
+            }),
+          ],
+        }),
+        new Paragraph({
+          text: '预警列表',
+          heading: HeadingLevel.HEADING_1,
+        }),
+        new Table({
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph('类型')] }),
+                new TableCell({ children: [new Paragraph('等级')] }),
+                new TableCell({ children: [new Paragraph('状态')] }),
+                new TableCell({ children: [new Paragraph('时间')] }),
+                new TableCell({ children: [new Paragraph('详情')] }),
+              ],
+            }),
+            ...reportData.warnings.map((w: any) =>
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph(w.type)] }),
+                  new TableCell({ children: [new Paragraph(w.level)] }),
+                  new TableCell({ children: [new Paragraph(w.status)] }),
+                  new TableCell({ children: [new Paragraph(w.time)] }),
+                  new TableCell({ children: [new Paragraph(w.message)] }),
+                ],
+              })
+            ),
+          ],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `生成时间: ${new Date().toLocaleString('zh-CN')}`, color: '999999' }),
+          ],
+        }),
+      ],
+    }],
+  })
+
+  const buffer = await Packer.toBuffer(doc)
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `预警处置报表_${startDate}_${endDate}.docx`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
 }
 
 export const generatePatrolReportData = (
@@ -185,13 +405,23 @@ export const generatePatrolReportData = (
   stations: Station[],
   warnings: Warning[]
 ) => {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+
+  const filteredWarnings = warnings.filter(w => {
+    const warningDate = new Date(w.timestamp)
+    return warningDate >= start && warningDate <= end
+  })
+
   return {
     title: '日常巡查报表',
     dateRange: `${startDate} 至 ${endDate}`,
+    startDate,
+    endDate,
     summary: {
-      totalInspections: Math.floor(Math.random() * 20) + 10,
+      totalInspections: Math.floor(Math.random() * 20) + 10 + filteredWarnings.length,
       stationsInspected: stations.length,
-      anomalies: warnings.filter((w) => w.status !== 'resolved').length,
+      anomalies: filteredWarnings.filter((w) => w.status !== 'resolved').length,
       equipmentStatus: stations.filter((s) => s.status === 'online').length,
     },
     stationData: stations.map((station) => ({
@@ -209,16 +439,26 @@ export const generateWarningReportData = (
   endDate: string,
   warnings: Warning[]
 ) => {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+
+  const filteredWarnings = warnings.filter(w => {
+    const warningDate = new Date(w.timestamp)
+    return warningDate >= start && warningDate <= end
+  })
+
   return {
     title: '预警处置报表',
     dateRange: `${startDate} 至 ${endDate}`,
+    startDate,
+    endDate,
     summary: {
-      totalWarnings: warnings.length,
-      pending: warnings.filter((w) => w.status === 'pending').length,
-      confirmed: warnings.filter((w) => w.status === 'confirmed').length,
-      resolved: warnings.filter((w) => w.status === 'resolved').length,
+      totalWarnings: filteredWarnings.length,
+      pending: filteredWarnings.filter((w) => w.status === 'pending').length,
+      confirmed: filteredWarnings.filter((w) => w.status === 'confirmed').length,
+      resolved: filteredWarnings.filter((w) => w.status === 'resolved').length,
     },
-    warnings: warnings.map((w) => ({
+    warnings: filteredWarnings.map((w) => ({
       type:
         w.type === 'wind'
           ? '大风预警'

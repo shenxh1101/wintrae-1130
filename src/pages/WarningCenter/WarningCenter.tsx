@@ -10,6 +10,7 @@ import {
   Eye,
   Droplets,
   Cpu,
+  RefreshCw,
 } from 'lucide-react'
 import { useOceanStore } from '../../store/useStore'
 import {
@@ -55,33 +56,70 @@ export default function WarningCenter() {
     setEditingThresholds([...thresholds])
   }, [thresholds])
 
-  const handleSaveThresholds = () => {
-    updateThresholds(editingThresholds)
-    
-    const currentWarnings = warnings.map((w) => {
-      const threshold = editingThresholds.find((t) => {
+  const reevaluateAllWarnings = (currentThresholds: any[]) => {
+    return warnings.map((w) => {
+      const threshold = currentThresholds.find((t) => {
         if (w.type === 'wind') return t.parameter === 'windSpeed'
         if (w.type === 'visibility') return t.parameter === 'visibility'
         if (w.type === 'water') return t.parameter === 'waterTemp' || t.parameter === 'salinity'
         return false
       })
-      
-      if (threshold) {
-        let newLevel = 'info'
-        if (w.type === 'visibility') {
-          if (w.value < threshold.danger) newLevel = 'danger'
-          else if (w.value < threshold.warning) newLevel = 'warning'
+
+      if (!threshold) return w
+
+      let newLevel = 'info'
+      let shouldKeep = false
+      let newThreshold = threshold.warning
+
+      if (w.type === 'visibility') {
+        if (w.value < threshold.danger) {
+          newLevel = 'danger'
+          shouldKeep = true
+          newThreshold = threshold.danger
+        } else if (w.value < threshold.warning) {
+          newLevel = 'warning'
+          shouldKeep = true
+          newThreshold = threshold.warning
         } else {
-          if (w.value > threshold.danger) newLevel = 'danger'
-          else if (w.value > threshold.warning) newLevel = 'warning'
+          shouldKeep = false
         }
-        return { ...w, level: newLevel }
+      } else {
+        if (w.value > threshold.danger) {
+          newLevel = 'danger'
+          shouldKeep = true
+          newThreshold = threshold.danger
+        } else if (w.value > threshold.warning) {
+          newLevel = 'warning'
+          shouldKeep = true
+          newThreshold = threshold.warning
+        } else {
+          shouldKeep = false
+        }
       }
-      return w
-    })
+
+      if (!shouldKeep) {
+        return null
+      }
+
+      return {
+        ...w,
+        level: newLevel,
+        threshold: newThreshold,
+      }
+    }).filter(Boolean)
+  }
+
+  const handleSaveThresholds = () => {
+    updateThresholds(editingThresholds)
     
-    setWarnings(currentWarnings)
+    const reevaluatedWarnings = reevaluateAllWarnings(editingThresholds)
+    setWarnings(reevaluatedWarnings)
+    
     setShowConfig(false)
+  }
+
+  const handleResetThresholds = () => {
+    setEditingThresholds([...thresholds])
   }
 
   const getTypeIcon = (type: string) => {
@@ -216,12 +254,16 @@ export default function WarningCenter() {
         {showConfig && (
           <div className="mb-6 p-4 rounded-lg bg-primary-deep/50">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-medium text-gray-300">预警阈值设置</h4>
+              <div>
+                <h4 className="text-sm font-medium text-gray-300">预警阈值设置</h4>
+                <p className="text-xs text-gray-500 mt-1">保存后将根据新阈值重新评估所有预警</p>
+              </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setEditingThresholds([...thresholds])}
-                  className="px-3 py-1 text-sm rounded-lg bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 transition-colors"
+                  onClick={handleResetThresholds}
+                  className="px-3 py-1 text-sm rounded-lg bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 transition-colors flex items-center gap-1"
                 >
+                  <RefreshCw size={14} />
                   重置
                 </button>
                 <button
@@ -229,7 +271,7 @@ export default function WarningCenter() {
                   className="px-3 py-1 text-sm rounded-lg bg-ocean-500/20 text-ocean-400 hover:bg-ocean-500/30 transition-colors flex items-center gap-1"
                 >
                   <Save size={14} />
-                  保存配置
+                  保存并重新评估
                 </button>
               </div>
             </div>
@@ -284,7 +326,7 @@ export default function WarningCenter() {
             </div>
             <div className="mt-4 p-3 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
               <div className="text-xs text-ocean-400">
-                💡 提示：保存阈值配置后，预警列表将根据新阈值重新计算预警等级
+                💡 提示：保存阈值配置后，系统将自动重新评估所有预警，移除不再符合条件的预警，并更新预警等级和阈值数字
               </div>
             </div>
           </div>

@@ -20,6 +20,8 @@ import {
   exportWarningReportPDF,
   exportPatrolReportExcel,
   exportWarningReportExcel,
+  exportPatrolReportWord,
+  exportWarningReportWord,
   generatePatrolReportData,
   generateWarningReportData,
 } from '../../services/exportService'
@@ -58,14 +60,23 @@ export default function ReportExport() {
       const warningData = generateWarningReportData(startDate, endDate, warnings)
       setPreviewData(warningData)
     } else {
+      const filteredWarnings = warnings.filter(w => {
+        const warningDate = new Date(w.timestamp)
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        return warningDate >= start && warningDate <= end
+      })
+
       const envData = {
         title: '综合环境报表',
         dateRange: `${startDate} 至 ${endDate}`,
+        startDate,
+        endDate,
         summary: {
           avgWindSpeed: '8.5',
           avgWaveHeight: '0.8',
           avgWaterTemp: '22.3',
-          warningsCount: warnings.length,
+          warningsCount: filteredWarnings.length,
         },
         trend: {
           windSpeed: '上升 5%',
@@ -77,7 +88,7 @@ export default function ReportExport() {
     }
   }
 
-  const handleExport = (format: 'pdf' | 'excel' | 'word') => {
+  const handleExport = async (format: 'pdf' | 'excel' | 'word') => {
     if (!previewData) {
       alert('请先生成预览')
       return
@@ -88,19 +99,19 @@ export default function ReportExport() {
     try {
       if (reportType === 'patrol') {
         if (format === 'pdf') {
-          exportPatrolReportPDF(previewData, stations)
+          exportPatrolReportPDF(previewData, stations, startDate, endDate)
         } else if (format === 'excel') {
-          exportPatrolReportExcel(previewData, stations)
-        } else {
-          alert('Word 格式导出功能开发中，请使用 PDF 或 Excel')
+          exportPatrolReportExcel(previewData, stations, startDate, endDate)
+        } else if (format === 'word') {
+          await exportPatrolReportWord(previewData, stations, startDate, endDate)
         }
       } else if (reportType === 'warning') {
         if (format === 'pdf') {
-          exportWarningReportPDF(previewData)
+          exportWarningReportPDF(previewData, startDate, endDate)
         } else if (format === 'excel') {
-          exportWarningReportExcel(previewData)
-        } else {
-          alert('Word 格式导出功能开发中，请使用 PDF 或 Excel')
+          exportWarningReportExcel(previewData, startDate, endDate)
+        } else if (format === 'word') {
+          await exportWarningReportWord(previewData, startDate, endDate)
         }
       }
 
@@ -225,7 +236,7 @@ export default function ReportExport() {
                 className="w-full p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-blue-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileText size={20} />
-                <span>导出 Word（开发中）</span>
+                <span>导出 Word</span>
               </button>
             </div>
           </div>
@@ -331,35 +342,46 @@ export default function ReportExport() {
 
                 {previewData.warnings && (
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-300 mb-3">预警列表</h3>
+                    <h3 className="text-sm font-semibold text-gray-300 mb-3">
+                      预警列表（{previewData.warnings.length}条）
+                    </h3>
                     <div className="space-y-2">
-                      {previewData.warnings.map((warning: any, index: number) => (
-                        <div
-                          key={index}
-                          className="p-3 rounded-lg bg-primary-deep/50 border-l-4 border-ocean-400"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs px-2 py-1 rounded bg-ocean-500/20 text-ocean-400">
-                                {warning.type}
-                              </span>
-                              <span
-                                className={`text-xs px-2 py-1 rounded ${
-                                  warning.level === '危险'
-                                    ? 'bg-status-danger/20 text-status-danger'
-                                    : warning.level === '警告'
-                                    ? 'bg-status-warning/20 text-status-warning'
-                                    : 'bg-status-info/20 text-status-info'
-                                }`}
-                              >
-                                {warning.level}
-                              </span>
+                      {previewData.warnings.length > 0 ? (
+                        previewData.warnings.map((warning: any, index: number) => (
+                          <div
+                            key={index}
+                            className="p-3 rounded-lg bg-primary-deep/50 border-l-4 border-ocean-400"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs px-2 py-1 rounded bg-ocean-500/20 text-ocean-400">
+                                  {warning.type}
+                                </span>
+                                <span
+                                  className={`text-xs px-2 py-1 rounded ${
+                                    warning.level === '危险'
+                                      ? 'bg-status-danger/20 text-status-danger'
+                                      : warning.level === '警告'
+                                      ? 'bg-status-warning/20 text-status-warning'
+                                      : 'bg-status-info/20 text-status-info'
+                                  }`}
+                                >
+                                  {warning.level}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {warning.status}
+                                </span>
+                              </div>
+                              <span className="text-xs text-gray-400">{warning.time}</span>
                             </div>
-                            <span className="text-xs text-gray-400">{warning.time}</span>
+                            <div className="text-sm text-gray-300">{warning.message}</div>
                           </div>
-                          <div className="text-sm text-gray-300">{warning.message}</div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">
+                          当前时间范围内无预警记录
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}
@@ -394,7 +416,7 @@ export default function ReportExport() {
 
                 <div className="mt-6 p-4 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
                   <div className="text-xs text-ocean-400">
-                    💡 提示：点击上方"导出 PDF"或"导出 Excel"按钮即可下载报表文件
+                    💡 提示：当前预览和导出的数据都基于所选时间范围（{startDate} 至 {endDate}），点击"导出 PDF"、"导出 Excel"或"导出 Word"即可下载对应格式的报表文件
                   </div>
                 </div>
               </div>
