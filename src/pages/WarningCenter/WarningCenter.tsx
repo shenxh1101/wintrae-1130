@@ -3,11 +3,11 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Filter,
   Settings,
-  Eye,
+  Save,
+  X,
   Wind,
-  Eye as VisibilityIcon,
+  Eye,
   Droplets,
   Cpu,
 } from 'lucide-react'
@@ -36,6 +36,7 @@ export default function WarningCenter() {
     status: 'all',
   })
   const [showConfig, setShowConfig] = useState(false)
+  const [editingThresholds, setEditingThresholds] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -46,18 +47,49 @@ export default function WarningCenter() {
       setStations(newStations)
       setCurrentData(newData)
       setWarnings(newWarnings)
-    } else {
-      setWarnings(generateWarnings(stations, []))
     }
     setLoading(false)
   }, [stations.length, setStations, setCurrentData, setWarnings])
+
+  useEffect(() => {
+    setEditingThresholds([...thresholds])
+  }, [thresholds])
+
+  const handleSaveThresholds = () => {
+    updateThresholds(editingThresholds)
+    
+    const currentWarnings = warnings.map((w) => {
+      const threshold = editingThresholds.find((t) => {
+        if (w.type === 'wind') return t.parameter === 'windSpeed'
+        if (w.type === 'visibility') return t.parameter === 'visibility'
+        if (w.type === 'water') return t.parameter === 'waterTemp' || t.parameter === 'salinity'
+        return false
+      })
+      
+      if (threshold) {
+        let newLevel = 'info'
+        if (w.type === 'visibility') {
+          if (w.value < threshold.danger) newLevel = 'danger'
+          else if (w.value < threshold.warning) newLevel = 'warning'
+        } else {
+          if (w.value > threshold.danger) newLevel = 'danger'
+          else if (w.value > threshold.warning) newLevel = 'warning'
+        }
+        return { ...w, level: newLevel }
+      }
+      return w
+    })
+    
+    setWarnings(currentWarnings)
+    setShowConfig(false)
+  }
 
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'wind':
         return <Wind size={16} />
       case 'visibility':
-        return <VisibilityIcon size={16} />
+        return <Eye size={16} />
       case 'water':
         return <Droplets size={16} />
       case 'device':
@@ -149,7 +181,7 @@ export default function WarningCenter() {
               <div className="text-sm text-gray-400 mb-1">今日预警</div>
               <div className="text-3xl font-bold text-gradient">{warnings.length}</div>
             </div>
-            <Eye size={32} className="text-ocean-400/50" />
+            <AlertTriangle size={32} className="text-ocean-400/50" />
           </div>
         </div>
 
@@ -168,45 +200,99 @@ export default function WarningCenter() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-200">预警列表</h3>
           <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="btn-secondary flex items-center gap-2"
+            onClick={() => {
+              setEditingThresholds([...thresholds])
+              setShowConfig(!showConfig)
+            }}
+            className={`btn-secondary flex items-center gap-2 ${
+              showConfig ? 'bg-ocean-500/20 text-ocean-400' : ''
+            }`}
           >
             <Settings size={16} />
-            阈值配置
+            {showConfig ? '关闭配置' : '阈值配置'}
           </button>
         </div>
 
         {showConfig && (
           <div className="mb-6 p-4 rounded-lg bg-primary-deep/50">
-            <h4 className="text-sm font-medium text-gray-300 mb-4">预警阈值设置</h4>
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-medium text-gray-300">预警阈值设置</h4>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingThresholds([...thresholds])}
+                  className="px-3 py-1 text-sm rounded-lg bg-gray-500/20 text-gray-400 hover:bg-gray-500/30 transition-colors"
+                >
+                  重置
+                </button>
+                <button
+                  onClick={handleSaveThresholds}
+                  className="px-3 py-1 text-sm rounded-lg bg-ocean-500/20 text-ocean-400 hover:bg-ocean-500/30 transition-colors flex items-center gap-1"
+                >
+                  <Save size={14} />
+                  保存配置
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {thresholds.map((threshold) => (
-                <div key={threshold.parameter} className="p-3 rounded-lg bg-primary-main/50">
-                  <div className="text-sm font-medium text-gray-200 mb-2">
-                    {threshold.parameter === 'windSpeed'
-                      ? '风速'
-                      : threshold.parameter === 'waveHeight'
-                      ? '浪高'
-                      : threshold.parameter === 'visibility'
-                      ? '能见度'
-                      : threshold.parameter === 'waterTemp'
-                      ? '水温'
-                      : '盐度'}
+              {editingThresholds.map((threshold) => (
+                <div key={threshold.parameter} className="p-4 rounded-lg bg-primary-main/50 border border-ocean-500/20">
+                  <div className="text-sm font-medium text-gray-200 mb-3">
+                    {threshold.name} ({threshold.unit})
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-status-warning">警告：{threshold.warning}{threshold.unit}</span>
-                    <span className="text-gray-400">|</span>
-                    <span className="text-status-danger">危险：{threshold.danger}{threshold.unit}</span>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-status-warning mb-1 block">警告阈值</label>
+                      <input
+                        type="number"
+                        value={threshold.warning}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0
+                          setEditingThresholds(
+                            editingThresholds.map((t) =>
+                              t.parameter === threshold.parameter
+                                ? { ...t, warning: value }
+                                : t
+                            )
+                          )
+                        }}
+                        className="w-full px-3 py-2 rounded-lg bg-primary-deep border border-status-warning/30 text-gray-200 text-sm focus:outline-none focus:border-status-warning"
+                        step="0.1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-status-danger mb-1 block">危险阈值</label>
+                      <input
+                        type="number"
+                        value={threshold.danger}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0
+                          setEditingThresholds(
+                            editingThresholds.map((t) =>
+                              t.parameter === threshold.parameter
+                                ? { ...t, danger: value }
+                                : t
+                            )
+                          )
+                        }}
+                        className="w-full px-3 py-2 rounded-lg bg-primary-deep border border-status-danger/30 text-gray-200 text-sm focus:outline-none focus:border-status-danger"
+                        step="0.1"
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 p-3 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
+              <div className="text-xs text-ocean-400">
+                💡 提示：保存阈值配置后，预警列表将根据新阈值重新计算预警等级
+              </div>
             </div>
           </div>
         )}
 
         <div className="flex items-center gap-4 mb-4">
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
+            <Settings size={16} className="text-gray-400" />
             <span className="text-sm text-gray-400">筛选：</span>
           </div>
 
@@ -308,7 +394,7 @@ export default function WarningCenter() {
                       {new Date(warning.timestamp).toLocaleString('zh-CN')}
                     </div>
                     <div className="text-sm font-mono text-gray-400 mt-1">
-                      {warning.value} / {warning.threshold}
+                      当前值: {warning.value} / 阈值: {warning.threshold}
                     </div>
                   </div>
                 </div>

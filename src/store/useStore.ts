@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 interface Station {
   id: string
@@ -62,9 +63,12 @@ interface EventMarker {
 
 interface Threshold {
   parameter: string
+  name: string
   warning: number
   danger: number
   unit: string
+  min?: number
+  max?: number
 }
 
 interface AppState {
@@ -83,14 +87,15 @@ interface OceanState {
   operations: Operation[]
   eventMarkers: EventMarker[]
   thresholds: Threshold[]
+  initialized: boolean
   setStations: (stations: Station[]) => void
   setCurrentData: (data: EnvironmentalData[]) => void
   setWarnings: (warnings: Warning[]) => void
   setOperations: (operations: Operation[]) => void
-  addWarning: (warning: Warning) => void
   updateWarning: (id: string, updates: Partial<Warning>) => void
   updateThresholds: (thresholds: Threshold[]) => void
   addEventMarker: (marker: EventMarker) => void
+  initializeData: (data: { stations: Station[]; currentData: EnvironmentalData[]; warnings: Warning[]; operations: Operation[] }) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -105,34 +110,66 @@ export const useAppStore = create<AppState>((set) => ({
   setTimeRange: (range) => set({ timeRange: range }),
 }))
 
-export const useOceanStore = create<OceanState>((set) => ({
-  stations: [],
-  currentData: [],
-  warnings: [],
-  operations: [],
-  eventMarkers: [],
-  thresholds: [
-    { parameter: 'windSpeed', warning: 10, danger: 15, unit: 'm/s' },
-    { parameter: 'waveHeight', warning: 1.0, danger: 2.0, unit: 'm' },
-    { parameter: 'visibility', warning: 5, danger: 1, unit: 'km' },
-    { parameter: 'waterTemp', warning: 32, danger: 35, unit: '℃' },
-    { parameter: 'salinity', warning: 38, danger: 40, unit: 'PSU' },
-  ],
-  setStations: (stations) => set({ stations }),
-  setCurrentData: (data) => set({ currentData: data }),
-  setWarnings: (warnings) => set({ warnings }),
-  setOperations: (operations) => set({ operations }),
-  addWarning: (warning) =>
-    set((state) => ({ warnings: [warning, ...state.warnings] })),
-  updateWarning: (id, updates) =>
-    set((state) => ({
-      warnings: state.warnings.map((w) =>
-        w.id === id ? { ...w, ...updates } : w
-      ),
-    })),
-  updateThresholds: (thresholds) => set({ thresholds }),
-  addEventMarker: (marker) =>
-    set((state) => ({ eventMarkers: [...state.eventMarkers, marker] })),
-}))
+export const useOceanStore = create<OceanState>()(
+  persist(
+    (set, get) => ({
+      stations: [],
+      currentData: [],
+      warnings: [],
+      operations: [],
+      eventMarkers: [],
+      initialized: false,
+      thresholds: [
+        { parameter: 'windSpeed', name: '风速', warning: 10, danger: 15, unit: 'm/s', min: 0, max: 30 },
+        { parameter: 'waveHeight', name: '浪高', warning: 1.0, danger: 2.0, unit: 'm', min: 0, max: 10 },
+        { parameter: 'visibility', name: '能见度', warning: 5, danger: 1, unit: 'km', min: 0, max: 50 },
+        { parameter: 'waterTemp', name: '水温', warning: 32, danger: 35, unit: '℃', min: -5, max: 40 },
+        { parameter: 'salinity', name: '盐度', warning: 38, danger: 40, unit: 'PSU', min: 0, max: 50 },
+      ],
+      
+      setStations: (stations) => set({ stations }),
+      setCurrentData: (data) => set({ currentData: data }),
+      setWarnings: (warnings) => set({ warnings }),
+      setOperations: (operations) => set({ operations }),
+      
+      updateWarning: (id, updates) =>
+        set((state) => ({
+          warnings: state.warnings.map((w) =>
+            w.id === id ? { ...w, ...updates } : w
+          ),
+        })),
+      
+      updateThresholds: (thresholds) => set({ thresholds }),
+      
+      addEventMarker: (marker) =>
+        set((state) => ({ eventMarkers: [...state.eventMarkers, marker] })),
+      
+      initializeData: (data) => {
+        const state = get()
+        if (!state.initialized || state.stations.length === 0) {
+          set({
+            stations: data.stations,
+            currentData: data.currentData,
+            warnings: data.warnings,
+            operations: data.operations,
+            initialized: true,
+          })
+        }
+      },
+    }),
+    {
+      name: 'ocean-storage',
+      partialize: (state) => ({
+        warnings: state.warnings,
+        thresholds: state.thresholds,
+        eventMarkers: state.eventMarkers,
+        initialized: state.initialized,
+        stations: state.stations,
+        currentData: state.currentData,
+        operations: state.operations,
+      }),
+    }
+  )
+)
 
 export type { Station, EnvironmentalData, Warning, Operation, EventMarker, Threshold }

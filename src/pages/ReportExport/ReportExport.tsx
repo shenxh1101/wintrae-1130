@@ -3,7 +3,6 @@ import {
   FileText,
   Download,
   Calendar,
-  Filter,
   Eye,
   FileSpreadsheet,
   File,
@@ -16,6 +15,14 @@ import {
   generateWarnings,
   generateOperations,
 } from '../../services/mockData'
+import {
+  exportPatrolReportPDF,
+  exportWarningReportPDF,
+  exportPatrolReportExcel,
+  exportWarningReportExcel,
+  generatePatrolReportData,
+  generateWarningReportData,
+} from '../../services/exportService'
 
 export default function ReportExport() {
   const { stations, warnings, operations, setStations, setCurrentData, setWarnings, setOperations } =
@@ -28,6 +35,7 @@ export default function ReportExport() {
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10))
   const [previewData, setPreviewData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     if (stations.length === 0) {
@@ -44,54 +52,10 @@ export default function ReportExport() {
 
   const generatePreview = () => {
     if (reportType === 'patrol') {
-      const patrolData = {
-        title: '日常巡查报表',
-        dateRange: `${startDate} 至 ${endDate}`,
-        summary: {
-          totalInspections: Math.floor(Math.random() * 20) + 10,
-          stationsInspected: stations.length,
-          anomalies: warnings.filter((w) => w.status !== 'resolved').length,
-          equipmentStatus: stations.filter((s) => s.status === 'online').length,
-        },
-        stationData: stations.map((station) => ({
-          name: station.name,
-          status: station.status === 'online' ? '正常' : '异常',
-          lastInspection: new Date(
-            Date.now() - Math.random() * 24 * 60 * 60 * 1000
-          ).toLocaleDateString('zh-CN'),
-        })),
-      }
+      const patrolData = generatePatrolReportData(startDate, endDate, stations, warnings)
       setPreviewData(patrolData)
     } else if (reportType === 'warning') {
-      const warningData = {
-        title: '预警处置报表',
-        dateRange: `${startDate} 至 ${endDate}`,
-        summary: {
-          totalWarnings: warnings.length,
-          pending: warnings.filter((w) => w.status === 'pending').length,
-          confirmed: warnings.filter((w) => w.status === 'confirmed').length,
-          resolved: warnings.filter((w) => w.status === 'resolved').length,
-        },
-        warnings: warnings.slice(0, 5).map((w) => ({
-          type:
-            w.type === 'wind'
-              ? '大风预警'
-              : w.type === 'visibility'
-              ? '低能见度'
-              : w.type === 'water'
-              ? '水质异常'
-              : '设备故障',
-          level: w.level === 'danger' ? '危险' : w.level === 'warning' ? '警告' : '提示',
-          status:
-            w.status === 'pending'
-              ? '待处理'
-              : w.status === 'confirmed'
-              ? '处理中'
-              : '已解决',
-          time: new Date(w.timestamp).toLocaleString('zh-CN'),
-          message: w.message,
-        })),
-      }
+      const warningData = generateWarningReportData(startDate, endDate, warnings)
       setPreviewData(warningData)
     } else {
       const envData = {
@@ -114,8 +78,40 @@ export default function ReportExport() {
   }
 
   const handleExport = (format: 'pdf' | 'excel' | 'word') => {
-    console.log(`Exporting ${reportType} report as ${format}`)
-    alert(`报表导出功能：\n类型：${reportType}\n格式：${format.toUpperCase()}\n时间范围：${startDate} 至 ${endDate}\n\n（实际导出需要后端支持）`)
+    if (!previewData) {
+      alert('请先生成预览')
+      return
+    }
+
+    setExporting(true)
+
+    try {
+      if (reportType === 'patrol') {
+        if (format === 'pdf') {
+          exportPatrolReportPDF(previewData, stations)
+        } else if (format === 'excel') {
+          exportPatrolReportExcel(previewData, stations)
+        } else {
+          alert('Word 格式导出功能开发中，请使用 PDF 或 Excel')
+        }
+      } else if (reportType === 'warning') {
+        if (format === 'pdf') {
+          exportWarningReportPDF(previewData)
+        } else if (format === 'excel') {
+          exportWarningReportExcel(previewData)
+        } else {
+          alert('Word 格式导出功能开发中，请使用 PDF 或 Excel')
+        }
+      }
+
+      setTimeout(() => {
+        setExporting(false)
+      }, 1000)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('导出失败，请重试')
+      setExporting(false)
+    }
   }
 
   if (loading) {
@@ -140,8 +136,8 @@ export default function ReportExport() {
             <div className="space-y-3">
               {[
                 { key: 'patrol', icon: FileText, name: '日常巡查报表', desc: '巡查记录和设备状态' },
-                { key: 'warning', icon: AlertTriangle, name: '预警处置报表', desc: '预警记录和处置情况' },
-                { key: 'environment', icon: File, name: '综合环境报表', desc: '环境参数统计和趋势' },
+                { key: 'warning', icon: FileText, name: '预警处置报表', desc: '预警记录和处置情况' },
+                { key: 'environment', icon: FileText, name: '综合环境报表', desc: '环境参数统计和趋势' },
               ].map((type) => (
                 <button
                   key={type.key}
@@ -207,7 +203,8 @@ export default function ReportExport() {
             <div className="space-y-3">
               <button
                 onClick={() => handleExport('pdf')}
-                className="w-full p-3 rounded-lg bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 transition-colors text-red-400 flex items-center gap-3"
+                disabled={!previewData || exporting}
+                className="w-full p-3 rounded-lg bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 transition-colors text-red-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <File size={20} />
                 <span>导出 PDF</span>
@@ -215,7 +212,8 @@ export default function ReportExport() {
 
               <button
                 onClick={() => handleExport('excel')}
-                className="w-full p-3 rounded-lg bg-green-500/20 border border-green-500/30 hover:bg-green-500/30 transition-colors text-green-400 flex items-center gap-3"
+                disabled={!previewData || exporting}
+                className="w-full p-3 rounded-lg bg-green-500/20 border border-green-500/30 hover:bg-green-500/30 transition-colors text-green-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileSpreadsheet size={20} />
                 <span>导出 Excel</span>
@@ -223,10 +221,11 @@ export default function ReportExport() {
 
               <button
                 onClick={() => handleExport('word')}
-                className="w-full p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-blue-400 flex items-center gap-3"
+                disabled={!previewData || exporting}
+                className="w-full p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-blue-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileText size={20} />
-                <span>导出 Word</span>
+                <span>导出 Word（开发中）</span>
               </button>
             </div>
           </div>
@@ -392,6 +391,12 @@ export default function ReportExport() {
                     </div>
                   </div>
                 )}
+
+                <div className="mt-6 p-4 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
+                  <div className="text-xs text-ocean-400">
+                    💡 提示：点击上方"导出 PDF"或"导出 Excel"按钮即可下载报表文件
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-gray-400">
@@ -406,5 +411,3 @@ export default function ReportExport() {
     </div>
   )
 }
-
-import { AlertTriangle } from 'lucide-react'

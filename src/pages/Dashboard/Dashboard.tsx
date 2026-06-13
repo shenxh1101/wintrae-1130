@@ -16,25 +16,41 @@ import {
   generateCurrentData,
   generateWarnings,
   generateHistoricalData,
+  generateOperations,
 } from '../../services/mockData'
 import { useOceanStore } from '../../store/useStore'
 
 export default function Dashboard() {
-  const { setStations, setCurrentData, setWarnings } = useOceanStore()
+  const { 
+    setStations, 
+    setCurrentData, 
+    setWarnings,
+    setOperations,
+    stations,
+    currentData,
+    warnings,
+    initializeData
+  } = useOceanStore()
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const stations = generateStations()
-    const currentData = generateCurrentData(stations)
-    const warnings = generateWarnings(stations, currentData)
+    const initializeAppData = () => {
+      if (stations.length === 0) {
+        const newStations = generateStations()
+        const newData = generateCurrentData(newStations)
+        const newWarnings = generateWarnings(newStations, newData)
+        const newOperations = generateOperations()
+        
+        setStations(newStations)
+        setCurrentData(newData)
+        setWarnings(newWarnings)
+        setOperations(newOperations)
+      }
+      setLoading(false)
+    }
 
-    setStations(stations)
-    setCurrentData(currentData)
-    setWarnings(warnings)
-    setLoading(false)
-  }, [setStations, setCurrentData, setWarnings])
-
-  const { currentData, warnings, stations } = useOceanStore()
+    initializeAppData()
+  }, [stations.length, setStations, setCurrentData, setWarnings, setOperations])
 
   const avgWindSpeed =
     currentData.length > 0
