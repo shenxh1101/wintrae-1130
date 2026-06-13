@@ -74,7 +74,7 @@ export default function WarningCenter() {
       if (windThreshold) {
         if (stationData.windSpeed > windThreshold.danger) {
           newWarnings.push({
-            id: `new-warning-${Date.now()}-${station.id}-wind`,
+            id: `new-warning-${Date.now()}-${station.id}-wind-${Math.random()}`,
             stationId: station.id,
             type: 'wind',
             level: 'danger',
@@ -86,7 +86,7 @@ export default function WarningCenter() {
           })
         } else if (stationData.windSpeed > windThreshold.warning) {
           newWarnings.push({
-            id: `new-warning-${Date.now()}-${station.id}-wind`,
+            id: `new-warning-${Date.now()}-${station.id}-wind-${Math.random()}`,
             stationId: station.id,
             type: 'wind',
             level: 'warning',
@@ -103,7 +103,7 @@ export default function WarningCenter() {
       if (visibilityThreshold) {
         if (stationData.visibility < visibilityThreshold.danger) {
           newWarnings.push({
-            id: `new-warning-${Date.now()}-${station.id}-visibility`,
+            id: `new-warning-${Date.now()}-${station.id}-visibility-${Math.random()}`,
             stationId: station.id,
             type: 'visibility',
             level: 'danger',
@@ -115,7 +115,7 @@ export default function WarningCenter() {
           })
         } else if (stationData.visibility < visibilityThreshold.warning) {
           newWarnings.push({
-            id: `new-warning-${Date.now()}-${station.id}-visibility`,
+            id: `new-warning-${Date.now()}-${station.id}-visibility-${Math.random()}`,
             stationId: station.id,
             type: 'visibility',
             level: 'warning',
@@ -132,7 +132,7 @@ export default function WarningCenter() {
       if (waterTempThreshold) {
         if (stationData.waterTemp > waterTempThreshold.danger) {
           newWarnings.push({
-            id: `new-warning-${Date.now()}-${station.id}-water`,
+            id: `new-warning-${Date.now()}-${station.id}-water-${Math.random()}`,
             stationId: station.id,
             type: 'water',
             level: 'danger',
@@ -144,7 +144,7 @@ export default function WarningCenter() {
           })
         } else if (stationData.waterTemp > waterTempThreshold.warning) {
           newWarnings.push({
-            id: `new-warning-${Date.now()}-${station.id}-water`,
+            id: `new-warning-${Date.now()}-${station.id}-water-${Math.random()}`,
             stationId: station.id,
             type: 'water',
             level: 'warning',
@@ -222,8 +222,8 @@ export default function WarningCenter() {
   const handleSaveThresholds = () => {
     updateThresholds(editingThresholds)
 
-    const existingWarnings = warnings.filter((w) => w.status !== 'resolved')
-    const reevaluatedWarnings = reevaluateAllWarnings(existingWarnings, editingThresholds)
+    const unresolvedWarnings = warnings.filter((w) => w.status !== 'resolved')
+    const reevaluatedWarnings = reevaluateAllWarnings(unresolvedWarnings, editingThresholds)
 
     const newWarningsFromCurrentData = generateWarningsFromCurrentData(
       stations,
@@ -231,14 +231,19 @@ export default function WarningCenter() {
       editingThresholds
     )
 
-    const existingIds = new Set(reevaluatedWarnings.map((w: any) => w.id))
-    const uniqueNewWarnings = newWarningsFromCurrentData.filter(
-      (nw: any) => !existingIds.has(nw.id)
+    const existingKeys = new Set(
+      reevaluatedWarnings.map((w: any) => 
+        `${w.stationId}-${w.type}-${w.level}`
+      )
     )
 
-    const allWarnings = [...uniqueNewWarnings, ...warnings.filter((w) => w.status === 'resolved')]
+    const uniqueNewWarnings = newWarningsFromCurrentData.filter(
+      (nw: any) => !existingKeys.has(`${nw.stationId}-${nw.type}-${nw.level}`)
+    )
 
-    setWarnings([...reevaluatedWarnings, ...allWarnings.filter((w: any) => w.status === 'resolved')])
+    const resolvedWarnings = warnings.filter((w) => w.status === 'resolved')
+
+    setWarnings([...reevaluatedWarnings, ...resolvedWarnings, ...uniqueNewWarnings])
 
     setShowConfig(false)
   }
@@ -451,7 +456,7 @@ export default function WarningCenter() {
             </div>
             <div className="mt-4 p-3 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
               <div className="text-xs text-ocean-400">
-                💡 提示：保存阈值配置后，系统将自动移除不再符合条件的预警，并根据当前监测数据生成新的预警
+                💡 提示：保存阈值配置后，系统将自动移除不再符合条件的预警，并根据当前监测数据生成新的预警。调高阈值会移除预警，调低阈值会增加预警。
               </div>
             </div>
           </div>

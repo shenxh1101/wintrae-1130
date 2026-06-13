@@ -605,6 +605,7 @@ export const generatePatrolReportData = (
   currentData: EnvironmentalData[]
 ) => {
   const start = new Date(startDate)
+  start.setHours(0, 0, 0, 0)
   const end = new Date(endDate)
   end.setHours(23, 59, 59, 999)
 
@@ -614,21 +615,24 @@ export const generatePatrolReportData = (
   })
 
   const stationInspectionRecords = stations.map((station) => {
-    const stationData = currentData.find(d => d.stationId === station.id)
-    const hasInspection = filteredWarnings.some(w => w.stationId === station.id)
+    const stationWarnings = filteredWarnings.filter(w => w.stationId === station.id)
     
-    let inspectionDate = new Date(start)
-    if (hasInspection) {
-      const stationWarnings = filteredWarnings.filter(w => w.stationId === station.id)
-      if (stationWarnings.length > 0) {
-        inspectionDate = new Date(Math.max(...stationWarnings.map(w => new Date(w.timestamp).getTime())))
+    if (stationWarnings.length === 0) {
+      return {
+        name: station.name,
+        status: '暂无记录',
+        lastInspection: '暂无记录',
       }
     }
+
+    const latestWarning = stationWarnings.reduce((latest, current) => {
+      return new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+    })
 
     return {
       name: station.name,
       status: station.status === 'online' ? '正常' : '异常',
-      lastInspection: inspectionDate.toLocaleDateString('zh-CN'),
+      lastInspection: new Date(latestWarning.timestamp).toLocaleDateString('zh-CN'),
     }
   })
 
@@ -653,6 +657,7 @@ export const generateWarningReportData = (
   warnings: Warning[]
 ) => {
   const start = new Date(startDate)
+  start.setHours(0, 0, 0, 0)
   const end = new Date(endDate)
   end.setHours(23, 59, 59, 999)
 
@@ -701,6 +706,7 @@ export const generateEnvironmentReportData = (
   currentData: EnvironmentalData[]
 ) => {
   const start = new Date(startDate)
+  start.setHours(0, 0, 0, 0)
   const end = new Date(endDate)
   end.setHours(23, 59, 59, 999)
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   FileText,
   Download,
@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   File,
   Printer,
+  AlertCircle,
 } from 'lucide-react'
 import { useOceanStore } from '../../store/useStore'
 import {
@@ -42,6 +43,8 @@ export default function ReportExport() {
   const [previewData, setPreviewData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
+  const [lastGeneratedRange, setLastGeneratedRange] = useState<{start: string, end: string, type: string} | null>(null)
 
   useEffect(() => {
     if (stations.length === 0) {
@@ -56,6 +59,16 @@ export default function ReportExport() {
     setLoading(false)
   }, [stations.length, setStations, setCurrentData, setWarnings, setOperations])
 
+  useEffect(() => {
+    if (lastGeneratedRange && 
+        (lastGeneratedRange.start !== startDate || 
+         lastGeneratedRange.end !== endDate || 
+         lastGeneratedRange.type !== reportType)) {
+      setNeedsRefresh(true)
+      setPreviewData(null)
+    }
+  }, [startDate, endDate, reportType, lastGeneratedRange])
+
   const generatePreview = () => {
     if (reportType === 'patrol') {
       const patrolData = generatePatrolReportData(startDate, endDate, stations, warnings, currentData)
@@ -67,11 +80,41 @@ export default function ReportExport() {
       const envData = generateEnvironmentReportData(startDate, endDate, warnings, currentData)
       setPreviewData(envData)
     }
+    
+    setLastGeneratedRange({
+      start: startDate,
+      end: endDate,
+      type: reportType
+    })
+    setNeedsRefresh(false)
+  }
+
+  const handleDateChange = (type: 'start' | 'end', value: string) => {
+    if (type === 'start') {
+      setStartDate(value)
+    } else {
+      setEndDate(value)
+    }
+    setNeedsRefresh(true)
+    setPreviewData(null)
+  }
+
+  const handleReportTypeChange = (type: string) => {
+    setReportType(type)
+    setNeedsRefresh(true)
+    setPreviewData(null)
   }
 
   const handleExport = async (format: 'pdf' | 'excel' | 'word') => {
-    if (!previewData) {
-      alert('请先生成预览')
+    if (needsRefresh || !previewData) {
+      alert('请先生成最新预览')
+      return
+    }
+
+    if (!previewData || 
+        previewData.startDate !== startDate || 
+        previewData.endDate !== endDate) {
+      alert('预览已过期，请重新生成预览后再导出')
       return
     }
 
@@ -141,10 +184,7 @@ export default function ReportExport() {
               ].map((type) => (
                 <button
                   key={type.key}
-                  onClick={() => {
-                    setReportType(type.key)
-                    setPreviewData(null)
-                  }}
+                  onClick={() => handleReportTypeChange(type.key)}
                   className={`w-full p-4 rounded-lg border transition-all text-left ${
                     reportType === type.key
                       ? 'bg-ocean-500/10 border-ocean-400'
@@ -176,7 +216,7 @@ export default function ReportExport() {
                 <input
                   type="date"
                   value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  onChange={(e) => handleDateChange('start', e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-primary-deep border border-ocean-500/30 text-gray-200 text-sm focus:outline-none focus:border-ocean-400"
                 />
               </div>
@@ -186,14 +226,14 @@ export default function ReportExport() {
                 <input
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  onChange={(e) => handleDateChange('end', e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-primary-deep border border-ocean-500/30 text-gray-200 text-sm focus:outline-none focus:border-ocean-400"
                 />
               </div>
 
               <button onClick={generatePreview} className="w-full btn-primary">
                 <Eye size={16} className="inline mr-2" />
-                生成预览
+                {needsRefresh ? '重新生成预览' : '生成预览'}
               </button>
             </div>
           </div>
@@ -203,29 +243,32 @@ export default function ReportExport() {
             <div className="space-y-3">
               <button
                 onClick={() => handleExport('pdf')}
-                disabled={!previewData || exporting}
+                disabled={needsRefresh || !previewData || exporting}
                 className="w-full p-3 rounded-lg bg-red-500/20 border border-red-500/30 hover:bg-red-500/30 transition-colors text-red-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <File size={20} />
                 <span>导出 PDF</span>
+                {needsRefresh && <AlertCircle size={14} className="ml-auto" />}
               </button>
 
               <button
                 onClick={() => handleExport('excel')}
-                disabled={!previewData || exporting}
+                disabled={needsRefresh || !previewData || exporting}
                 className="w-full p-3 rounded-lg bg-green-500/20 border border-green-500/30 hover:bg-green-500/30 transition-colors text-green-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileSpreadsheet size={20} />
                 <span>导出 Excel</span>
+                {needsRefresh && <AlertCircle size={14} className="ml-auto" />}
               </button>
 
               <button
                 onClick={() => handleExport('word')}
-                disabled={!previewData || exporting}
+                disabled={needsRefresh || !previewData || exporting}
                 className="w-full p-3 rounded-lg bg-blue-500/20 border border-blue-500/30 hover:bg-blue-500/30 transition-colors text-blue-400 flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileText size={20} />
                 <span>导出 Word</span>
+                {needsRefresh && <AlertCircle size={14} className="ml-auto" />}
               </button>
             </div>
           </div>
@@ -235,13 +278,22 @@ export default function ReportExport() {
           <div className="card min-h-[600px]">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-200">报表预览</h3>
-              <button
-                onClick={() => window.print()}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Printer size={16} />
-                打印
-              </button>
+              <div className="flex items-center gap-4">
+                {needsRefresh && (
+                  <div className="flex items-center gap-2 text-sm text-status-warning">
+                    <AlertCircle size={16} />
+                    <span>预览已过期，请重新生成</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => window.print()}
+                  className="btn-secondary flex items-center gap-2"
+                  disabled={needsRefresh || !previewData}
+                >
+                  <Printer size={16} />
+                  打印
+                </button>
+              </div>
             </div>
 
             {previewData ? (
@@ -314,6 +366,8 @@ export default function ReportExport() {
                               className={`text-xs px-2 py-1 rounded ${
                                 station.status === '正常'
                                   ? 'bg-status-normal/20 text-status-normal'
+                                  : station.status === '暂无记录'
+                                  ? 'bg-gray-500/20 text-gray-400'
                                   : 'bg-status-danger/20 text-status-danger'
                               }`}
                             >
@@ -405,14 +459,16 @@ export default function ReportExport() {
 
                 <div className="mt-6 p-4 rounded-lg bg-ocean-500/10 border border-ocean-500/20">
                   <div className="text-xs text-ocean-400">
-                    💡 提示：当前预览和导出的数据都基于所选时间范围（{startDate} 至 {endDate}），点击"导出 PDF"、"导出 Excel"或"导出 Word"即可下载对应格式的报表文件
+                    💡 提示：当前预览基于时间范围（{startDate} 至 {endDate}）。修改日期后需重新生成预览，导出按钮将在预览过期时显示警告图标。
                   </div>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-96 text-gray-400">
                 <FileText size={64} className="mb-4 opacity-50" />
-                <div className="text-lg mb-2">暂无预览</div>
+                <div className="text-lg mb-2">
+                  {needsRefresh ? '预览已过期' : '暂无预览'}
+                </div>
                 <div className="text-sm">请选择报表类型并设置筛选条件后生成预览</div>
               </div>
             )}
